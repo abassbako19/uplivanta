@@ -1,0 +1,5 @@
+// Copy to public/config.js and replace values. Do not put the service-role key here.
+window.UPLIVANTA_CONFIG = {
+  url: "https://ydjubbdxhvuocwqwcgns.supabase.co",
+  anonKey: "YOUR_SUPABASE_ANON_KEY"
+};

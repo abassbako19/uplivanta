@@ -1,0 +1,20 @@
+{
+  "name": "uplivanta-platform",
+  "version": "0.4.2",
+  "private": true,
+  "description": "UPLIVANTA secure signup-first assistance platform with username auth, test-only Paystack checkout, and AI assistant",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "^2.57.0",
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "helmet": "^8.1.0",
+    "express-rate-limit": "^7.5.0"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
