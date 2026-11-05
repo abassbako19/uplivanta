@@ -5,14 +5,21 @@
   "description": "UPLIVANTA secure signup-first assistance platform with username auth, test-only Paystack checkout, and AI assistant",
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "next:dev": "next dev --webpack -p 3000",
+    "next:build": "next build",
+    "next:start": "next start -p 3000",
+    "api:dev": "node --watch server.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.57.0",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
     "helmet": "^8.1.0",
-    "express-rate-limit": "^7.5.0"
+    "next": "^16.4.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
   },
   "engines": {
     "node": ">=20"
