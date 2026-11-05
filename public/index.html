@@ -59,6 +59,7 @@ body:not(.authenticated)>header,body:not(.authenticated)>main.wrap,body:not(.aut
 <div class="toast" id="toast"></div><button class="btn dark" id="chatLaunch" onclick="toggleHelpChat()" style="position:fixed;right:18px;bottom:18px;z-index:8;border-radius:999px;box-shadow:0 8px 28px #101a2c44">✦ Uplivanta Help</button><aside id="helpChat" style="display:none;position:fixed;right:16px;bottom:78px;width:min(360px,calc(100vw - 32px));max-height:70vh;overflow:auto;background:white;border:1px solid #dfe6ef;border-radius:18px;box-shadow:0 18px 50px #101a2c33;z-index:9;padding:16px"><div style="display:flex;justify-content:space-between;align-items:center"><b>Uplivanta assistant</b><button class="btn ghost" onclick="toggleHelpChat()">Close</button></div><p class="muted" style="font-size:.86rem">I can explain the platform and guide you. I cannot verify identities, approve requests or decide whether someone is a scammer.</p><div id="chatMessages" style="font-size:.9rem;line-height:1.5"><p><b>Assistant:</b> Hi! What would you like help with?</p></div><div class="searchbar"><input id="chatQuestion" placeholder="Ask about verification, points…" onkeydown="if(event.key==='Enter')askUplivanta()"><button class="btn dark" id="chatSend" onclick="askUplivanta()">Send</button></div></aside>
 <script>
 let supabaseClient=null,session=null,mode='request',pendingPaymentReference=null,pendingAfterAuth=null,authMode='signup',signupRequiresManualSignin=false,selectedDonationRequestId=null,selectedDonationRemaining=0,chatHistory=[];
+const AUTH_APP_URL='https://uplivanta.onrender.com';
 const $=id=>document.getElementById(id);
 function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),3800)}
 function switchTab(id,btn){['discover','requests','community'].forEach(x=>$(x).style.display=x===id?'block':'none');document.querySelectorAll('.tab').forEach(x=>x.classList.toggle('active',x===btn));}
@@ -119,7 +120,7 @@ if(authMode==='signup'){
  if(password!==$('authPasswordConfirm').value)throw Error('The passwords do not match.');
  const check=await fetch('/api/auth/username-available',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});const cj=await check.json();if(!check.ok)throw Error(cj.error||'Could not check username.');if(!cj.available)throw Error('That username is already taken. Choose another one.');
  signupRequiresManualSignin=true;
- const {data,error}=await supabaseClient.auth.signUp({email,password,options:{data:{display_name,username},emailRedirectTo:location.origin+'/?signup_confirmed=1'}});
+ const {data,error}=await supabaseClient.auth.signUp({email,password,options:{data:{display_name,username},emailRedirectTo:AUTH_APP_URL+'/?signup_confirmed=1'}});
  if(error){signupRequiresManualSignin=false;throw error;}
  if(data.session)await supabaseClient.auth.signOut();
  signupRequiresManualSignin=false;session=null;document.body.classList.remove('authenticated');$('authEmail').value=email;$('authPassword').value='';$('authPasswordConfirm').value='';setAuthMode('signin');$('authIntro').textContent='Your account has been created. Sign in after confirming your email.';
@@ -132,10 +133,44 @@ if(identifier.includes('@')){const {error}=await supabaseClient.auth.signInWithP
 else{const r=await fetch('/api/auth/username-login',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username:identifier.toLowerCase(),password})});const j=await r.json();if(!r.ok)throw Error(j.error||'Username sign-in failed.');const {error}=await supabaseClient.auth.setSession(j.session);if(error)throw error;}
 toast('Signed in. Welcome to Uplivanta.');
 }catch(e){msg.textContent=authError(e)}finally{$('authSubmit').disabled=false}}
-async function oauthSignIn(provider){try{if(!supabaseClient)throw Error('Sign-in is not ready. Refresh and try again.');const {error}=await supabaseClient.auth.signInWithOAuth({provider,options:{redirectTo:location.origin}});if(error)throw error;}catch(e){$('authMsg').textContent='Social sign-in is not enabled yet: '+authError(e)+' Enable this provider in Supabase Auth and add its client credentials.'}}
-async function signOut(){try{await supabaseClient.auth.signOut()}catch(e){console.error(e)}session=null;document.body.classList.remove('authenticated');$('authModal').classList.add('open');setAuthMode('signup');$('authIntro').textContent='Create your Uplivanta account before accessing the platform.';renderAuth();toast('You have been signed out.')}
-async function forgotPassword(){const email=$('authEmail').value.trim();if(!email||!email.includes('@')){$('authMsg').textContent='Enter the email address on your account first.';return}const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo:location.origin+'/'});$('authMsg').textContent=error?authError(error):'If that email has an account, a reset link is on its way.'}
-async function resendConfirmation(){const email=$('authEmail').value.trim();if(!email||!email.includes('@')){$('authMsg').textContent='Enter your email address first.';return}const {error}=await supabaseClient.auth.resend({type:'signup',email,options:{emailRedirectTo:location.origin+'/?signup_confirmed=1'}});$('authMsg').textContent=error?authError(error):'Confirmation email sent again.'}
+async function oauthSignIn(provider){try{if(!supabaseClient)throw Error('Sign-in is not ready. Refresh and try again.');const {error}=await supabaseClient.auth.signInWithOAuth({provider,options:{redirectTo:AUTH_APP_URL}});if(error)throw error;}catch(e){$('authMsg').textContent='Social sign-in is not enabled yet: '+authError(e)+' Enable this provider in Supabase Auth and add its client credentials.'}}
+async function signOut(){
+ try{
+  if(!supabaseClient)throw Error('Authentication is unavailable. Refresh and try again.');
+  const {error}=await supabaseClient.auth.signOut();
+  if(error)throw error;
+  session=null;
+  document.body.classList.remove('authenticated');
+  $('authModal').classList.add('open');
+  setAuthMode('signup');
+  $('authIntro').textContent='Create your Uplivanta account before accessing the platform.';
+  renderAuth();
+  toast('You have been signed out.');
+ }catch(e){
+  console.error('Sign-out failed:',e);
+  toast('Sign-out failed: '+authError(e));
+ }
+}
+async function forgotPassword(){
+ const email=$('authEmail').value.trim();
+ if(!email||!email.includes('@')){$('authMsg').textContent='Enter the email address on your account first.';return;}
+ try{
+  if(!supabaseClient)throw Error('Authentication is unavailable. Refresh and try again.');
+  const {error}=await supabaseClient.auth.resetPasswordForEmail(email,{redirectTo:AUTH_APP_URL+'/'});
+  if(error)throw error;
+  $('authMsg').textContent='If that email has an account, a reset link is on its way.';
+ }catch(e){$('authMsg').textContent=authError(e);}
+}
+async function resendConfirmation(){
+ const email=$('authEmail').value.trim();
+ if(!email||!email.includes('@')){$('authMsg').textContent='Enter your email address first.';return;}
+ try{
+  if(!supabaseClient)throw Error('Authentication is unavailable. Refresh and try again.');
+  const {error}=await supabaseClient.auth.resend({type:'signup',email,options:{emailRedirectTo:AUTH_APP_URL+'/?signup_confirmed=1'}});
+  if(error)throw error;
+  $('authMsg').textContent='Confirmation email sent again.';
+ }catch(e){$('authMsg').textContent=authError(e);}
+}
 
 function trustTable(t){if(!t)return'<p class="muted">Trust measurements are not available yet.</p>';const none='No history yet';const f=(m,d,x)=>m.rate===null?none:m.rate+'% ('+x+')';const rp=t.reports;const rows=[['Identity status','Identity checked, pending or not verified',t.identity.label],['Assistance completion','Percentage of accepted assistance cases completed',f(t.completion,0,t.completion.completed+' of '+t.completion.total)],['Evidence rate','Completed cases with supporting evidence',f(t.evidence,0,t.evidence.withEvidence+' of '+t.evidence.completed)],['Response rate','How often the person responds',f(t.response,0,t.response.responded+' of '+t.response.total)],['Community reports','Reports received and their investigation status',rp.received?rp.received+' received: '+rp.underInvestigation+' under investigation, '+rp.substantiated+' substantiated, '+rp.cleared+' cleared':'None received']];return'<div style="overflow-x:auto"><table style="width:100%;border-collapse:collapse;font-size:.9rem">'+'<tr style="text-align:left;color:var(--muted)"><th style="padding:8px 6px">Measurement</th><th style="padding:8px 6px">What it tells users</th><th style="padding:8px 6px">Result</th></tr>'+rows.map(r=>'<tr style="border-top:1px solid var(--line)"><td style="padding:9px 6px"><b>'+esc(r[0])+'</b></td><td style="padding:9px 6px" class="muted">'+esc(r[1])+'</td><td style="padding:9px 6px"><b>'+esc(r[2])+'</b></td></tr>').join('')+'</table></div><p class="disclaimer">These are activity measures, not guarantees. A report alone does not prove wrongdoing; reports are reviewed by people.</p>'}
 async function showTrust(id){try{const r=await fetch('/api/requests/'+encodeURIComponent(id)+'/trust');const j=await r.json();if(!r.ok)throw Error(j.error);$('trustBody').innerHTML=trustTable(j.trust);$('trustModal').classList.add('open')}catch(e){toast(e.message)}}
